@@ -1,6 +1,6 @@
 {
   "name": "@sudobility/entity_client",
-  "version": "0.0.47",
+  "version": "0.0.48",
   "type": "module",
   "description": "Frontend client library for entity/organization management",
   "main": "dist/index.js",
@@ -26,11 +26,11 @@
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
     "@tanstack/react-query": "^5.0.0",
-    "@sudobility/types": "^1.9.68"
+    "@sudobility/types": "^1.9.71"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
-    "@sudobility/types": "^1.9.68",
+    "@sudobility/types": "^1.9.71",
     "@tanstack/react-query": "^5.0.0",
     "@testing-library/react": "^16.3.3",
     "@types/bun": "^1.2.8",

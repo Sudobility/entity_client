@@ -4,17 +4,18 @@
 > Run `git commit`, `git push`, `gh pr create`, or `scripts/push_all.sh` **only when the user
 > explicitly asks in that turn**. Approval for an earlier change does not carry forward, and
 > finishing a task is not permission to commit it.
+> Do not use feature branches for code changes — stay on the current branch.
 
 ## Overview
 
-React client library for entity/organization management that provides an HTTP API client (`EntityClient`) and a full suite of TanStack Query v5 hooks for CRUD operations on entities, members, and invitations. It also includes a React context provider (`CurrentEntityProvider`) for managing workspace/entity selection state with localStorage persistence.
+React client library for entity/organization management: an HTTP API client
+(`EntityClient`) plus TanStack Query v5 hooks for CRUD on entities, members,
+invitations, and API keys. Also ships a `CurrentEntityProvider` context for
+workspace selection with per-user `localStorage` persistence.
 
-- **Package**: `@sudobility/entity_client`
-- **Version**: `0.0.20`
-- **License**: BUSL-1.1
-- **Package Manager**: Bun
-- **Module Format**: ESM (`"type": "module"`)
-- **Build Output**: `dist/` (ESM with `.d.ts` declarations)
+- **Package**: `@sudobility/entity_client` (published to **GitHub Packages**, not npmjs)
+- **License**: BUSL-1.1 · **Package manager**: Bun · **Module format**: ESM (`"type": "module"`)
+- **Build output**: `dist/` (ESM with `.d.ts` declarations); treat `package.json` as source of truth for versions.
 
 ## Project Structure
 
@@ -23,237 +24,126 @@ src/
 ├── index.ts                        # Public barrel exports (all hooks, client, types)
 ├── hooks/
 │   ├── index.ts                    # Hook barrel exports
+│   ├── entityUser.tsx              # EntityUserProvider + useEntityUserId (user-scoped cache)
 │   ├── useEntities.ts              # Entity CRUD hooks + entityKeys
 │   ├── useEntityMembers.ts         # Member management hooks + memberKeys
-│   ├── useInvitations.ts           # Invitation management hooks + invitationKeys
-│   └── useCurrentEntity.tsx        # CurrentEntityProvider context + useCurrentEntity hook
-└── network/
-    ├── index.ts                    # Network barrel exports
-    ├── EntityClient.ts             # HTTP API client class
-    └── EntityClient.test.ts        # Unit tests (vitest)
+│   ├── useInvitations.ts           # Invitation hooks + invitationKeys
+│   ├── useEntityApiKeys.ts         # API key hooks + apiKeyKeys
+│   ├── useCurrentEntity.tsx        # CurrentEntityProvider + useCurrentEntity(Optional)
+│   └── useCurrentEntity.test.tsx   # Context / account-switch tests (vitest)
+├── network/
+│   ├── index.ts                    # Network barrel exports
+│   ├── EntityClient.ts             # HTTP API client class
+│   └── EntityClient.test.ts        # Unit tests (vitest)
+└── types/
+    ├── index.ts                    # Type barrel exports
+    ├── errors.ts                   # EntityErrorCode enum + EntityApiError
+    └── api-keys.ts                 # API key wire types (not yet in @sudobility/types)
 ```
 
-## Key Exports
+## Public API
 
-### Client Class
+The full export surface (every hook, factory, and type) is documented in
+`README.md`. Non-obvious notes only:
 
-| Export | Type | Description |
-|--------|------|-------------|
-| `EntityClient` | class | HTTP client wrapping authenticated `fetch` calls to the entity API |
-| `EntityClientConfig` | interface | Config: `{ baseUrl: string; networkClient: NetworkClient }` |
-| `ApiResponse<T>` | interface | Standard response: `{ success: boolean; data?: T; error?: string }` |
-
-### Entity Hooks (useEntities.ts)
-
-| Export | Type | Description |
-|--------|------|-------------|
-| `useEntities(client)` | query hook | List all entities for the current user |
-| `useEntity(client, slug)` | query hook | Get single entity by slug (disabled when slug is null) |
-| `useCreateEntity(client)` | mutation hook | Create a new organization; invalidates entity list |
-| `useUpdateEntity(client)` | mutation hook | Update entity; invalidates detail + list |
-| `useDeleteEntity(client)` | mutation hook | Delete entity; invalidates entity list |
-| `entityKeys` | object | Query key factory: `.all`, `.lists()`, `.list()`, `.details()`, `.detail(slug)` |
-
-### Member Hooks (useEntityMembers.ts)
-
-| Export | Type | Description |
-|--------|------|-------------|
-| `useEntityMembers(client, slug)` | query hook | List members of an entity (disabled when slug is null) |
-| `useUpdateMemberRole(client)` | mutation hook | Update member role; invalidates member list |
-| `useRemoveMember(client)` | mutation hook | Remove member; invalidates member list |
-| `memberKeys` | object | Query key factory: `.all(slug)`, `.list(slug)` (nested under `entityKeys.detail`) |
-
-### Invitation Hooks (useInvitations.ts)
-
-| Export | Type | Description |
-|--------|------|-------------|
-| `useMyInvitations(client)` | query hook | List pending invitations for the current user |
-| `useEntityInvitations(client, slug)` | query hook | List invitations for an entity (disabled when slug is null) |
-| `useCreateInvitation(client)` | mutation hook | Create invitation; invalidates entity invitation list |
-| `useCancelInvitation(client)` | mutation hook | Cancel invitation; invalidates entity invitation list |
-| `useRenewInvitation(client)` | mutation hook | Renew expired invitation; invalidates entity invitation list |
-| `useAcceptInvitation(client)` | mutation hook | Accept invitation by token; invalidates my invitations + entity list |
-| `useDeclineInvitation(client)` | mutation hook | Decline invitation by token; invalidates my invitations |
-| `invitationKeys` | object | Query key factory: `.all`, `.myList()`, `.entityList(slug)` |
-
-### Context Provider (useCurrentEntity.tsx)
-
-| Export | Type | Description |
-|--------|------|-------------|
-| `CurrentEntityProvider` | component | React context provider managing current entity/workspace selection |
-| `useCurrentEntity()` | hook | Access current entity context (throws if outside provider) |
-| `useCurrentEntityOptional()` | hook | Access current entity context (returns null if outside provider) |
-| `CurrentEntityContextValue` | interface | Context shape: `currentEntity`, `entities`, `selectEntity()`, `refresh()`, `clear()`, etc. |
-| `CurrentEntityProviderProps` | interface | Provider props: `client`, `children`, `user`, `defaultEntitySlug?`, `onEntityChange?` |
-| `AuthUser` | interface | Minimal user interface: `{ uid: string; email?: string \| null }` |
-
-### Re-exported Types (from @sudobility/types)
-
-`Entity`, `EntityWithRole`, `EntityMember`, `EntityInvitation`, `EntityType`, `EntityRole`, `InvitationStatus`, `EntityPermissions`, `CreateEntityRequest`, `UpdateEntityRequest`, `InviteMemberRequest`, `UpdateMemberRoleRequest`
+- **`EntityClient`** wraps an injected `NetworkClient` (from `@sudobility/types`),
+  not `fetch` directly. Config: `{ baseUrl, networkClient }`.
+- All client methods return **`BaseResponse<T>`** (from `@sudobility/types`):
+  `{ success: boolean; data?: T; error?: string; timestamp: string }`. There is
+  no local `ApiResponse` type.
+- **API key wire types** (`EntityApiKey`, `CreatedEntityApiKey`,
+  `CreateApiKeyRequest`, `UpdateApiKeyRequest`) live locally in
+  `src/types/api-keys.ts`, not in `@sudobility/types` — move them there once a
+  types release carries them. Request bodies use snake_case (`key_name`, `is_active`).
+- **`EntityErrorCode` / `EntityApiError`** are local (`src/types/errors.ts`).
 
 ## Development Commands
 
 ```bash
-bun run build          # Compile TypeScript to dist/ (uses tsconfig.build.json)
-bun run build:watch    # Watch mode TypeScript compilation
-bun run clean          # Remove dist/ directory
-bun run typecheck      # Type-check without emitting (bunx tsc --noEmit)
-bun run lint           # ESLint on src/
+bun run build          # Compile to dist/ (tsconfig.build.json) + scripts/fix-esm-imports.mjs
+bun run build:watch    # Watch-mode compilation
+bun run clean          # Remove dist/
+bun run typecheck      # bunx tsc --noEmit
+bun run lint           # ESLint on src/ (flat config: eslint.config.js)
 bun run lint:fix       # ESLint with auto-fix
-bun run format         # Prettier format src/**/*.{ts,tsx,js,jsx,json}
-bun run test           # Run tests with vitest (single run)
-bun run test:watch     # Run tests with vitest (watch mode)
+bun run format         # Prettier on src/**/*.{ts,tsx,js,jsx,json}
+bun run test:unit      # vitest run (single pass) — NOTE: there is no `test` alias
+bun run test:watch     # vitest (watch mode)
 ```
 
-**Publishing**:
-```bash
-bun run build && npm publish    # prepublishOnly runs clean + build automatically
-```
+- `build` runs `tsc` then `scripts/fix-esm-imports.mjs`, which rewrites emitted
+  relative imports to add `.js` extensions (required for Node ESM resolution).
+- `prepublishOnly` auto-runs `clean` + `build`. CI publishes to GitHub Packages
+  on push to `main`/`develop` via `.github/workflows/ci-cd.yml` (reusable workflow
+  `johnqh/workflows/.github/workflows/unified-cicd.yml`, `publish-target: github`).
 
 ## Architecture / Patterns
 
-### Dependency Injection via Client Instance
+### Dependency injection via client instance
+Hooks take an `EntityClient` as their first argument (no global singleton), so
+tests and multiple API environments are straightforward.
 
-All hooks accept an `EntityClient` instance as the first argument rather than relying on a global singleton or context. This makes testing straightforward and supports multiple API environments.
+### Query key factory — every key starts with the user id (critical gotcha)
+Each domain has a key factory, and **every key begins with the signed-in user id**:
 
-```typescript
-const client = new EntityClient({
-  baseUrl: 'https://api.example.com/api/v1',
-  networkClient: myNetworkClient,
-});
-
-const { data } = useEntities(client);
 ```
-
-### Query Key Factory Pattern — every key starts with the user
-
-Each domain uses a query key factory, and **every key begins with the signed-in
-user id**:
-
-```typescript
-entityKeys.all(uid)                   // ['entities', uid]
-entityKeys.list(uid)                  // ['entities', uid, 'list']
 entityKeys.detail(uid, slug)          // ['entities', uid, 'detail', slug]
-memberKeys.list(uid, slug)            // ['entities', uid, 'detail', slug, 'members', 'list']
+memberKeys.list(uid, slug)            // [...entityKeys.detail, 'members', 'list']
+apiKeyKeys.list(uid, slug)            // [...entityKeys.detail, 'api-keys', 'list']
 invitationKeys.myList(uid)            // ['invitations', uid, 'my']
-invitationKeys.entityList(uid, slug)  // ['entities', uid, 'detail', slug, 'invitations']
+invitationKeys.entityList(uid, slug)  // [...entityKeys.detail, 'invitations']
 ```
 
-The cache used to be keyed only by what was fetched. A tab that signed out and
-registered a new account kept the old account's workspace list, the app sent
-the old workspace's id as `X-Entity-Id` on every request, and the server refused
-all of them, including the one that would have corrected it. That happened
-twice. Clearing the cache when the user changes races the first render after
-the change; a key that names the user makes the wrong answer unreachable.
+Why: the cache was once keyed only by what was fetched. After a sign-out +
+new-account sign-in in the same tab, the old account's workspace list survived,
+the app sent the stale workspace id as `X-Entity-Id`, and the server refused
+every request (including the corrective one). Clearing cache on user change
+races the first render; keying by user makes the wrong answer unreachable.
 
-Hooks read the user from `EntityUserProvider` (`useEntityUserId`).
-`CurrentEntityProvider` renders one, so apps using it need nothing else; an app
-that calls the hooks without it must wrap them in `EntityUserProvider`, or its
-queries share a `null` user's entry. `useEntities` also takes an explicit
-`userId` option, which the provider uses because it sits above its own
-`EntityUserProvider`. `useCurrentEntity.test.tsx` holds the property: switching
-accounts in one tab never offers the previous account's workspace.
+Hooks read the user via `useEntityUserId()` from the nearest `EntityUserProvider`.
+`CurrentEntityProvider` renders one internally, so apps using it need nothing
+else. An app calling hooks **without** either provider shares a single `null`
+user's cache entry. `useEntities` also accepts an explicit `userId` option
+(used by `CurrentEntityProvider`, which sits above its own `EntityUserProvider`).
+`useCurrentEntity.test.tsx` guards this: switching accounts never offers the
+previous account's workspace.
 
-### Automatic Cache Invalidation
+### Automatic cache invalidation
+Mutations invalidate related queries in `onSuccess`: entity create/delete → list;
+update → detail + list; member/API-key mutations → that entity's list; accept
+invitation → my-invitations + entity list.
 
-Mutations automatically invalidate related queries via `onSuccess` callbacks:
-- Entity create/delete invalidates entity lists
-- Entity update invalidates both the detail and list queries
-- Member mutations invalidate the member list for that entity
-- Accepting an invitation invalidates both the user's invitation list and entity list
-
-### CurrentEntityProvider State Machine
-
-The `CurrentEntityProvider` manages workspace selection with this priority chain:
-1. Explicitly selected slug (via `selectEntity()`)
-2. Persisted slug from `localStorage`, per user (key: `currentEntitySlug:<uid>`; storage that is missing or throws, as on React Native, is skipped)
-3. Personal entity (entity with `entityType === EntityType.PERSONAL`)
+### CurrentEntityProvider selection priority
+1. Explicitly selected slug (`selectEntity()`)
+2. Persisted slug from `localStorage`, per user (key `currentEntitySlug:<uid>`;
+   missing/throwing storage, e.g. React Native or private windows, is skipped)
+3. Personal entity (`entityType === EntityType.PERSONAL`)
 4. First entity in the list
 
-When the user changes it drops the previous user's cached entities and invitations and restores the new user's own remembered selection.
+On user change it drops the previous user's cached entities/invitations and
+restores the new user's remembered selection.
 
-### Conditional Query Disabling
+### Conditional query disabling
+Hooks with a nullable `slug` disable the query when `slug` is null: `enabled: false`
+plus a `['disabled']` placeholder query key, avoiding wasted API calls.
 
-Hooks that accept a nullable `slug` parameter disable the query when slug is null by setting `enabled: false` and using a `['disabled']` placeholder query key. This prevents unnecessary API calls.
+### Error handling
+Client methods never throw; on failure they return
+`{ success: false, error, timestamp }`. Hooks check `response.success` and throw
+so TanStack Query can surface the error.
 
-### API Response Wrapping
+## Adding a new entity-scoped endpoint
+1. Add the method to `EntityClient` (`src/network/EntityClient.ts`) + tests.
+2. Add/extend a hook in `src/hooks/` with `useQuery`/`useMutation`.
+3. Add keys to the relevant factory (first arg is always `userId`).
+4. Wire cache invalidation in `onSuccess`.
+5. Export from `src/hooks/index.ts` and `src/index.ts`.
 
-All `EntityClient` methods return `ApiResponse<T>` with `{ success, data?, error? }`. Hooks check `response.success` and throw errors for TanStack Query's error handling. The client returns `{ success: false, error: 'Not authenticated' }` when the auth token is null instead of throwing.
+## TypeScript config
+Target ES2020, module ESNext with `bundler` resolution, `jsx: react-jsx`, strict
+mode (`strict`, `noUnusedLocals`, `noUnusedParameters`). `tsconfig.build.json`
+extends the base and excludes test files and `__tests__/`.
 
-## Common Tasks
-
-### Adding a new entity-scoped API endpoint
-
-1. Add the method to `EntityClient` in `src/network/EntityClient.ts`
-2. Add tests in `src/network/EntityClient.test.ts`
-3. Create or extend a hook in `src/hooks/` using `useQuery` or `useMutation`
-4. Add query keys to the appropriate key factory
-5. Set up cache invalidation in `onSuccess`
-6. Export from `src/hooks/index.ts` and `src/index.ts`
-
-### Adding a new query hook
-
-```typescript
-export function useMyNewData(client: EntityClient, entitySlug: string | null) {
-  return useQuery({
-    queryKey: entitySlug ? myKeys.list(entitySlug) : ['disabled'],
-    queryFn: async () => {
-      if (!entitySlug) return [];
-      const response = await client.myNewEndpoint(entitySlug);
-      if (!response.success || !response.data) {
-        throw new Error(response.error || 'Failed to fetch');
-      }
-      return response.data;
-    },
-    enabled: !!entitySlug,
-  });
-}
-```
-
-### Adding a new mutation hook
-
-```typescript
-export function useMyMutation(client: EntityClient) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (args: MyArgs) => {
-      const response = await client.myMutationEndpoint(args);
-      if (!response.success || !response.data) {
-        throw new Error(response.error || 'Failed');
-      }
-      return response.data;
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: relatedKeys.list(variables.slug) });
-    },
-  });
-}
-```
-
-## Peer / Key Dependencies
-
-| Dependency | Version | Purpose |
-|------------|---------|---------|
-| `react` | `^18.0.0 \|\| ^19.0.0` | Peer: React runtime for hooks and context |
-| `@tanstack/react-query` | `^5.0.0` | Peer: Data fetching, caching, mutations |
-| `@sudobility/types` | `^1.9.51` | Peer: Shared type definitions (Entity, EntityMember, etc.) |
-| `typescript` | `^5.9.3` | Dev: TypeScript compiler |
-| `vitest` | `^4.0.4` | Dev: Test runner |
-| `eslint` | `^9.0.0` | Dev: Linting (flat config) |
-| `prettier` | `^3.0.0` | Dev: Code formatting |
-
-### TypeScript Configuration
-
-- **Target**: ES2020
-- **Module**: ESNext with `bundler` module resolution
-- **JSX**: `react-jsx` (automatic runtime)
-- **Strict mode**: Enabled (`strict: true`, `noUnusedLocals`, `noUnusedParameters`)
-- **Build config** (`tsconfig.build.json`): Extends base, excludes test files and `__tests__/` directories
-
-### CI/CD
-
-Automated via GitHub Actions (`.github/workflows/ci-cd.yml`). Runs on pushes and PRs to `main`/`develop`. Uses a shared workflow from `johnqh/workflows` for unified CI/CD with public NPM publishing.
-
-## Git Workflow
-
-- Do not use feature branches for code changes. Always stay on the current branch.
+## Peer dependencies
+`react` (^18 || ^19), `@tanstack/react-query` (^5), `@sudobility/types` — all
+provided by the host app.
